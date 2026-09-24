@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Polls by Pagelove · Authorization & Constraints</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 32px; background: #faf8f4; color: #111; max-width: 960px; }
+  h1, h2 { font-weight: 500; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 24px; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #e5e3de; vertical-align: top; }
+  th { background: #f3f0e9; font-weight: 500; }
+  ul { margin: 0; padding-left: 18px; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  .constraint { margin-bottom: 12px; padding: 12px; background: #f3f0e9; border-radius: 4px; font-size: 12px; }
+  .constraint code { display: block; margin: 2px 0; }
+</style>
+</head>
+<body>
+
+<h1>Polls by Pagelove · Authorization rules</h1>
+<p>Pagelove is deny-by-default. Every read and write the app performs is granted here, and nothing else.</p>
+
+<table>
+  <thead><tr><th>Actor</th><th>Resource</th><th>Method</th><th>Selector</th><th>Action</th></tr></thead>
+  <tbody>
+
+    <!-- Public read of the app pages and assets -->
+    <tr itemscope itemtype="https://pagelove.org/AuthorizationRule">
+      <td itemprop="actor">*</td>
+      <td><ul><li itemprop="resource">/index.html</li><li itemprop="resource">/polls/*</li><li itemprop="resource">/assets/*</li></ul></td>
+      <td><ul><li itemprop="method">GET</li><li itemprop="method">HEAD</li><li itemprop="method">OPTIONS</li></ul></td>
+      <td itemprop="selector"></td>
+      <td itemprop="action">allow</td>
+    </tr>
+
+    <!-- Anyone can create a poll: POST to the template, which writes the new poll page -->
+    <tr itemscope itemtype="https://pagelove.org/AuthorizationRule">
+      <td itemprop="actor">*</td>
+      <td itemprop="resource">/templates/new-poll.html</td>
+      <td><ul><li itemprop="method">POST</li></ul></td>
+      <td itemprop="selector"></td>
+      <td itemprop="action">allow</td>
+    </tr>
+
+    <!-- Templated creation also checks PUT at the final location -->
+    <tr itemscope itemtype="https://pagelove.org/AuthorizationRule">
+      <td itemprop="actor">*</td>
+      <td itemprop="resource">/polls/*</td>
+      <td><ul><li itemprop="method">PUT</li></ul></td>
+      <td itemprop="selector"></td>
+      <td itemprop="action">allow</td>
+    </tr>
+
+    <!-- Vote: append a response row -->
+    <tr itemscope itemtype="https://pagelove.org/AuthorizationRule">
+      <td itemprop="actor">*</td>
+      <td itemprop="resource">/polls/*</td>
+      <td><ul><li itemprop="method">POST</li></ul></td>
+      <td itemprop="selector">tbody#responses</td>
+      <td itemprop="action">allow</td>
+    </tr>
+
+    <!-- Change or withdraw a response row -->
+    <tr itemscope itemtype="https://pagelove.org/AuthorizationRule">
+      <td itemprop="actor">*</td>
+      <td itemprop="resource">/polls/*</td>
+      <td><ul><li itemprop="method">PUT</li><li itemprop="method">DELETE</li></ul></td>
+      <td itemprop="selector">tbody#responses &gt; tr[itemtype="https://pagelove.org/PollResponse"]</td>
+      <td itemprop="action">allow</td>
+    </tr>
+
+  </tbody>
+</table>
+
+<h2>Shape constraints</h2>
+<p>Closed shapes: a write that introduces any element or attribute not listed below is rejected with <code>422</code>. They fire on the granular write paths the app uses (POST into the responses body, PUT/DELETE on a response row).</p>
+
+<div class="constraint" itemscope itemtype="https://pagelove.org/ShapeConstraint">
+  <strong>Responses body (POST target)</strong>
+  <meta itemprop="resource" content="/polls/*">
+  <meta itemprop="selector" content="tbody#responses">
+  <code itemprop="permit">tr[id][itemscope][itemtype="https://pagelove.org/PollResponse"]</code>
+  <code itemprop="permit">th[scope="row"][itemprop="name"]</code>
+  <code itemprop="permit">td[itemprop="vote"][data-option][data-vote]</code>
+</div>
+
+<div class="constraint" itemscope itemtype="https://pagelove.org/ShapeConstraint">
+  <strong>Response row (PUT / DELETE target)</strong>
+  <meta itemprop="resource" content="/polls/*">
+  <meta itemprop="selector" content="tbody#responses > tr[id][itemscope][itemtype=&quot;https://pagelove.org/PollResponse&quot;]">
+  <code itemprop="constraint">:has(&gt; th[itemprop="name"])</code>
+  <code itemprop="permit">th[scope="row"][itemprop="name"]</code>
+  <code itemprop="permit">td[itemprop="vote"][data-option][data-vote]</code>
+</div>
+
+<h2>Triggers</h2>
+<p>Templated creation needs a document-level <code>PUT</code> grant on <code>/polls/*</code>. On its own that grant would let any visitor replace any element of an existing poll, or the whole document. These triggers run before the write and refuse what the rules alone cannot express.</p>
+
+<div class="constraint" itemscope itemtype="https://pagelove.org/Trigger">
+  <strong>Element-level writes: only <code>POST</code> into <code>#responses</code> and <code>PUT</code> on a response row</strong>
+  <meta itemprop="resource" content="/polls/*">
+  <meta itemprop="method" content="PUT">
+  <meta itemprop="method" content="POST">
+  <div itemprop="when" itemscope itemtype="https://pagelove.org/Sessel">
+    <script itemprop="source" type="text/sessel">
+      @schema Context url("https://pagelove.org/Context");
+      Context.request.headers["range"] != null
+    </script>
+  </div>
+  <div itemprop="action" itemscope itemtype="https://pagelove.org/Sessel">
+    <script itemprop="source" type="text/sessel">
+      @schema Context url("https://pagelove.org/Context");
+      @schema HTTPResponse url("https://pagelove.org/HTTPResponse");
+      let range = Context.request.headers["range"];
+      let method = Context.request.method;
+      if (method == "POST") {
+        if (range.matches("^selector=#responses$") == false) {
+          throw new HTTPResponse { status: 403, message: "Responses may only be appended to #responses." }
+        }
+      }
+      if (method == "PUT") {
+        if (range.matches("^selector=#r-[a-z0-9]{1,24}$") == false) {
+          throw new HTTPResponse { status: 403, message: "Only a response row (#r-…) may be replaced on a poll page." }
+        }
+      }
+    </script>
+  </div>
+</div>
+
+<div class="constraint" itemscope itemtype="https://pagelove.org/Trigger">
+  <strong>Whole-document <code>PUT</code>: a poll that already exists cannot be overwritten</strong>
+  <meta itemprop="resource" content="/polls/*">
+  <meta itemprop="method" content="PUT">
+  <div itemprop="when" itemscope itemtype="https://pagelove.org/Sessel">
+    <script itemprop="source" type="text/sessel">
+      @schema Context url("https://pagelove.org/Context");
+      Context.request.headers["range"] == null
+    </script>
+  </div>
+  <div itemprop="action" itemscope itemtype="https://pagelove.org/Sessel">
+    <script itemprop="source" type="text/sessel">
+      @schema Context url("https://pagelove.org/Context");
+      @schema HTTPResponse url("https://pagelove.org/HTTPResponse");
+      let path = Context.request.path;
+      if ((${[itemtype="https://pagelove.org/Poll"]} from "/polls/*").any(p => p.path() == path)) {
+        throw new HTTPResponse { status: 409, message: "This poll already exists and cannot be replaced." }
+      }
+    </script>
+  </div>
+</div>
+
+</body>
+</html>

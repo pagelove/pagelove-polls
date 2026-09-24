@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:p="https://pagelove.org/1.0" xmlns:r="https://pagelove.org/Binding/CSS">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Polls by Pagelove · Find a time that works for everyone</title>
+<meta name="description" content="A group scheduling poll built entirely from HTML documents on Pagelove. No backend code.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/polls.css?v=20260924b">
+</head>
+<body>
+
+<header class="site wrap">
+  <a class="brand" href="/">Polls <em>by Pagelove</em></a>
+  <nav>
+    <a class="hide-sm" href="#how">How it works</a>
+    <a class="hide-sm" href="/admin/auth.html">Auth rules</a>
+    <a class="pill" href="https://pagelove.com/" target="_blank" rel="noopener"><span class="dot"></span>Built on Pagelove</a>
+  </nav>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <p class="eyebrow">Scheduling polls · no backend</p>
+    <h1>Find a time that works for <em>everyone.</em></h1>
+    <p>Propose a few dates, share one link, and watch availability fill in live. Every poll is an HTML document on Pagelove: creating, voting and live updates are plain HTTP against the page itself.</p>
+  </section>
+
+  <div class="two-col">
+
+    <section class="card" aria-labelledby="create-h">
+      <div class="card-head">
+        <h2 id="create-h">Create a poll</h2>
+        <p>Submitting this form POSTs to a Liquid template that writes a brand-new poll page.</p>
+      </div>
+      <div class="card-body">
+        <form id="create" method="post" action="/templates/new-poll.html" novalidate>
+          <div class="field">
+            <label for="title">What are you planning?</label>
+            <input class="input" id="title" name="title" type="text" maxlength="120" placeholder="Team lunch, book club, design review…" required autocomplete="off">
+          </div>
+          <div class="row-2">
+            <div class="field">
+              <label for="organizer">Your name</label>
+              <input class="input" id="organizer" name="organizer" type="text" maxlength="60" placeholder="Ada" required autocomplete="name">
+            </div>
+            <div class="field">
+              <label for="description">Description <small>(optional)</small></label>
+              <input class="input" id="description" name="description" type="text" maxlength="280" placeholder="Where, why, anything to bring">
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Proposed dates <small>· time is optional</small></label>
+            <div class="options" id="options"></div>
+            <div class="add-opt"><button type="button" class="btn secondary sm" id="add-option">+ Add another date</button></div>
+          </div>
+
+          <label class="check"><input type="checkbox" name="listed" checked> List this poll on the homepage</label>
+
+          <p class="error" id="form-error" role="alert"></p>
+
+          <input type="hidden" name="options" id="options-field">
+          <input type="hidden" name="created" id="created-field">
+          <input type="hidden" name="createdLabel" id="created-label-field">
+
+          <div class="form-foot">
+            <button type="submit" class="btn primary lg" id="submit-btn">Create poll →</button>
+            <span class="hint">You'll be redirected to the new poll's shareable page.</span>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="recent-h">
+      <div class="card-head">
+        <h2 id="recent-h">Recent polls</h2>
+        <p>Rendered server-side from every <code>Poll</code> item on this host.</p>
+      </div>
+      <div class="card-body">
+        <div class="poll-list" id="recent" r:polls="[itemtype='https://pagelove.org/Poll']" p:template="text/liquid">
+          {% assign listed = polls | where: "listed", "true" | sort: "created" | reverse %}
+          {% if listed.size == 0 %}
+          <p class="empty">No polls yet. Create the first one on the left.</p>
+          {% endif %}
+          {% for poll in listed limit: 8 %}
+          {% assign url = poll['@id'] | split: "#" | first %}
+          <a class="poll-card" href="{{ url }}">
+            <h3>{{ poll.title | escape }}</h3>
+            <p>by {{ poll.organizer | escape }} · {{ poll.optionCount }} dates · <span class="rc" data-src="{{ url }}">…</span> responses</p>
+            <time>{{ poll.createdLabel | escape }}</time>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <section class="how" id="how">
+    <h2>How it works on Pagelove</h2>
+    <p>Polls by Pagelove has no server code. The HTML documents are the application; the platform supplies storage, validation, permissions and real-time updates.</p>
+    <div class="tiles">
+      <div class="tile">
+        <div class="n">1</div>
+        <h3>Create is a POST to a template</h3>
+        <p>The form posts to <code>/templates/new-poll.html</code>. Liquid renders a complete poll page whose <code>&lt;base href&gt;</code> names its own URL; the server stores it there and redirects you to it.</p>
+      </div>
+      <div class="tile">
+        <div class="n">2</div>
+        <h3>Voting is a POST of one <code>&lt;tr&gt;</code></h3>
+        <p>Your availability is a table row appended with <code>Range: selector=#responses</code>. Editing is a <code>PUT</code> on that row, withdrawing is a <code>DELETE</code>. No API layer in between.</p>
+      </div>
+      <div class="tile">
+        <div class="n">3</div>
+        <h3>Rules and shapes guard the page</h3>
+        <p>Deny-by-default <code>AuthorizationRule</code>s open exactly the elements the app needs. A closed <code>ShapeConstraint</code> rejects any row that isn't a name plus vote cells.</p>
+      </div>
+      <div class="tile">
+        <div class="n">4</div>
+        <h3>Live updates via Server-Sent Events</h3>
+        <p>Each poll page subscribes to its own mutation stream. When someone else votes, their row lands in your grid without a refresh.</p>
+      </div>
+    </div>
+    <div class="links">
+      <a href="/templates/new-poll.html">View the poll template →</a>
+      <a href="/admin/auth.html">View authorization rules &amp; constraints →</a>
+      <a href="https://docs.pagelove.com/" target="_blank" rel="noopener">Pagelove docs →</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-foot wrap">
+  <span>Polls by Pagelove · a scheduling-poll template for the Pagelove™ gallery</span>
+  <span><a href="https://pagelove.com/" target="_blank" rel="noopener">pagelove.com</a></span>
+</footer>
+
+<script src="/assets/create.js?v=20260924b" type="module"></script>
+</body>
+</html>
